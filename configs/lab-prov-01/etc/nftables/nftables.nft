@@ -1,0 +1,39 @@
+#!/usr/sbin/nft -f
+# ============================================================================
+#  TechCore :: lab-prov-01 (Provisioning Server) :: nftables policy
+#  Role: Cobbler/PXE/DHCP/TFTP/HTTP + SSH management. Dual-homed.
+#  Interfaces:
+#     enp0s3 = NAT (upstream to host/Internet, source of mgmt SSH via PF)
+#     enp0s8 = Internal "techcore-lab" (PXE segment, 192.168.100.0/24)
+#  Design: default-deny ingress, stateful, least-privilege per interface.
+# ============================================================================
+
+flush ruleset
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        iif "lo" accept
+        ct state established,related accept
+        ct state invalid limit rate 10/minute burst 20 packets \
+            log prefix "NFT-INVALID: " counter drop
+        iifname "enp0s8" ip protocol icmp icmp type echo-request \
+            limit rate 20/second burst 40 packets accept
+        iifname "enp0s8" ip protocol icmp icmp type echo-reply accept
+        ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply, \
+            nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
+        iifname "enp0s3" ip saddr 10.0.2.2 tcp dport 22 ct state new \
+            limit rate 6/minute burst 10 packets accept
+        iifname "enp0s8" ip saddr 192.168.100.0/24 tcp dport 22 \
+            ct state new limit rate 6/minute burst 10 packets accept
+        iifname "enp0s8" udp dport { 67, 68, 69 } accept
+        iifname "enp0s8" tcp dport { 80, 443, 25151 } accept
+        limit rate 5/minute burst 10 packets \
+            log prefix "NFT-DROP-IN: " counter drop
+    }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
