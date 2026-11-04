@@ -1,0 +1,28 @@
+# Образы, диски, снапшоты
+*.iso
+*.vdi
+*.vmdk
+*.qcow2
+*.img
+*.ova
+
+# Логи и временные
+*.log
+*.tmp
+*.bak
+*~
+
+# Секреты и ключи
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+*.p12
+.shadow*
+secrets/
+*.vault
+
+# Служебное
+__pycache__/
+*.pyc
+.vagrant/
