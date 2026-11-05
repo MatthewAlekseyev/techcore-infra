@@ -117,7 +117,7 @@ sequenceDiagram
     VM->>D: TFTP: vmlinuz + initrd
     VM->>H: GET /kickstarts/alt-p10-server.ks
     VM->>H: GET /alt-p10/ (RPM-пакеты)
-    Note over VM: Автоустановка; post: сеть, SSH, /etc/hosts
+    Note over VM: Автоустановка: post: сеть, SSH, /etc/hosts
     VM->>T: GET /trigger/installed?mac=MAC
     T-->>D: создаёт pxelinux.cfg/01-MAC = LOCALBOOT 0
     Note over VM: Reboot: 01-MAC найден РАНЬШЕ default, загрузка с диска
