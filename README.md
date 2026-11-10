@@ -5,9 +5,8 @@
 > ГК «Росатом». Всё состояние — в Git, все решения — через ADR, весь провижининг —
 > zero-touch.
 
-![phase-1](https://img.shields.io/badge/phase--1-complete-brightgreen)
-![phase-2](https://img.shields.io/badge/phase--2-in--progress-yellow)
-![os](https://img.shields.io/badge/OS-ALT_Linux_p10-blue)
+![phase-1](https://img.shields.io/badge/phase--1-in--progress-yellow)
+![os](https://img.shields.io/badge/OS-ALT_Linux_10_2-blue)
 ![iac](https://img.shields.io/badge/IaC-Git%20--%3E%20Ansible%20--%3E%20GitOps-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -285,8 +284,8 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 
 ## 📄 Лицензия
 
-MIT © 2026 Matthew Alekseyev.Подробности: [`LICENSE`](LICENSE).
+MIT © 2026 Matthew Alekseyev. Подробности: [`LICENSE`](LICENSE).
 
 ---
 
-*Автор: Матвей Алексеев · [email](mailto:malekseyev@gmail.com) · собрано как портфолио-проект по ТЗ ГК «Росатом».*
+*Автор: Матвей Алексеев · [email](mailto:alekseyevma@gmail.com) · собрано как портфолио-проект по ТЗ ГК «Росатом».*
