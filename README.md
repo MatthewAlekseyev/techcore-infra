@@ -231,10 +231,11 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 | ADR | Решение | Статус |
 | :--- | :--- | :--- |
 | [0000](docs/adr/0000-project-context.md) | Контекст ТЗ, фазовая поставка, ADR-процесс | принято |
-| [0001](docs/adr/0001-dual-homed-network.md) | Dual-homed топология провижининг-хоста | принято |
-| [0002](docs/adr/0002-firewall-default-deny.md) | Host-firewall default-deny, посегментный least-privilege | принято |
-| [0003](docs/adr/0003-cobbler-to-dnsmasq-pivot.md) | Пивот Cobbler → dnsmasq по результатам аудита ветки p10 | принято |
-
+| [0001](docs/adr/0001-network-topology-dual-homed.md) | Dual-homed топология провижининг-хоста | принято |
+| [0002](docs/adr/0002-nftables-default-deny.md) | Host-firewall default-deny, посегментный least-privilege | принято |
+| [0003](docs/adr/0003-dnsmasq-over-cobbler.md) | Пивот Cobbler → dnsmasq по результатам аудита ветки p10 | принято |
+| [0004](docs/adr/0004-validate-before-apply-commit.md) | Валидация конфига до применения и до публичного коммита | принято |
+| [0005](docs/adr/0005-discover-facts-from-system.md) | Distro-факты узнавать из системы
 ---
 
 ## 🩺 Troubleshooting: знаковые случаи
