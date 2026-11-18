@@ -1,0 +1,32 @@
+#!/bin/bash
+# TechCore :: pxe-just-once
+# GET /trigger/installed?mac=<MAC>  →  per-MAC карточка LOCALBOOT 0.
+# Работает от apache2 (не root). Валидация MAC защищает от path traversal.
+
+echo "Content-type: text/plain"
+echo ""
+
+CARD_DIR="/var/lib/tftpboot/pxelinux.cfg"
+LOG="/var/log/pxe-triggers.log"
+
+MAC=$(printf '%s' "$QUERY_STRING" \
+      | sed -n 's/.*mac=\([^&]*\).*/\1/p' \
+      | sed 's/%3[Aa]/:/g' \
+      | tr 'A-Z' 'a-z' | tr ':' '-')
+
+if ! printf '%s' "$MAC" | grep -qE '^([0-9a-f]{2}-){5}[0-9a-f]{2}$'; then
+    echo "ERROR: invalid or missing mac"
+    printf '%s BAD_MAC query=%s\n' "$(date '+%F %T')" "$QUERY_STRING" >> "$LOG" 2>/dev/null
+    exit 0
+fi
+
+CARD="$CARD_DIR/01-$MAC"
+
+if printf 'DEFAULT local\nLABEL local\n    LOCALBOOT 0\n' > "$CARD" 2>/dev/null; then
+    chmod a+r "$CARD" 2>/dev/null
+    echo "OK: 01-$MAC -> LOCALBOOT 0"
+    printf '%s OK 01-%s from=%s\n' "$(date '+%F %T')" "$MAC" "$REMOTE_ADDR" >> "$LOG" 2>/dev/null
+else
+    echo "ERROR: cannot write card (owner/permissions)"
+    printf '%s FAIL 01-%s from=%s\n' "$(date '+%F %T')" "$MAC" "$REMOTE_ADDR" >> "$LOG" 2>/dev/null
+fi
