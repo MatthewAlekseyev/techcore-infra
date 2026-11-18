@@ -5,9 +5,8 @@
 > ГК «Росатом». Всё состояние — в Git, все решения — через ADR, весь провижининг —
 > zero-touch.
 
-![phase-1](https://img.shields.io/badge/phase--1-complete-brightgreen)
-![phase-2](https://img.shields.io/badge/phase--2-in--progress-yellow)
-![os](https://img.shields.io/badge/OS-ALT_Linux_p10-blue)
+![phase-1](https://img.shields.io/badge/phase--1-in--progress-yellow)
+![os](https://img.shields.io/badge/OS-ALT_Linux_10_2-blue)
 ![iac](https://img.shields.io/badge/IaC-Git%20--%3E%20Ansible%20--%3E%20GitOps-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -117,7 +116,7 @@ sequenceDiagram
     VM->>D: TFTP: vmlinuz + initrd
     VM->>H: GET /kickstarts/alt-p10-server.ks
     VM->>H: GET /alt-p10/ (RPM-пакеты)
-    Note over VM: Автоустановка; post: сеть, SSH, /etc/hosts
+    Note over VM: Автоустановка: post: сеть, SSH, /etc/hosts
     VM->>T: GET /trigger/installed?mac=MAC
     T-->>D: создаёт pxelinux.cfg/01-MAC = LOCALBOOT 0
     Note over VM: Reboot: 01-MAC найден РАНЬШЕ default, загрузка с диска
@@ -232,10 +231,11 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 | ADR | Решение | Статус |
 | :--- | :--- | :--- |
 | [0000](docs/adr/0000-project-context.md) | Контекст ТЗ, фазовая поставка, ADR-процесс | принято |
-| [0001](docs/adr/0001-dual-homed-network.md) | Dual-homed топология провижининг-хоста | принято |
-| [0002](docs/adr/0002-firewall-default-deny.md) | Host-firewall default-deny, посегментный least-privilege | принято |
-| [0003](docs/adr/0003-cobbler-to-dnsmasq-pivot.md) | Пивот Cobbler → dnsmasq по результатам аудита ветки p10 | принято |
-
+| [0001](docs/adr/0001-network-topology-dual-homed.md) | Dual-homed топология провижининг-хоста | принято |
+| [0002](docs/adr/0002-nftables-default-deny.md) | Host-firewall default-deny, посегментный least-privilege | принято |
+| [0003](docs/adr/0003-dnsmasq-over-cobbler.md) | Пивот Cobbler → dnsmasq по результатам аудита ветки p10 | принято |
+| [0004](docs/adr/0004-validate-before-apply-commit.md) | Валидация конфига до применения и до публичного коммита | принято |
+| [0005](docs/adr/0005-discover-facts-from-system.md) | Distro-факты узнавать из системы
 ---
 
 ## 🩺 Troubleshooting: знаковые случаи
@@ -285,8 +285,8 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 
 ## 📄 Лицензия
 
-MIT © 2026 Matthew Alekseyev.Подробности: [`LICENSE`](LICENSE).
+MIT © 2026 Matthew Alekseyev. Подробности: [`LICENSE`](LICENSE).
 
 ---
 
-*Автор: Матвей Алексеев · [email](mailto:malekseyev@gmail.com) · собрано как портфолио-проект по ТЗ ГК «Росатом».*
+*Автор: Матвей Алексеев · [email](mailto:alekseyevma@gmail.com) · собрано как портфолио-проект по ТЗ ГК «Росатом».*
