@@ -269,22 +269,24 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 - **Коммиты:** Conventional Commits (`feat|fix|docs|refactor|chore(область): суть`), тело — «почему», а не «что».
 - **Релизы:** тег `phase-N` + GitHub Release на каждую закрытую фазу.
 - **Ревью-дисциплина:** шаблоны задач фаз и PR (`.github/`); чек-лист PR включает проверку секретов и валидацию конфигов.
-- **Источник истины:** конфигурации хостов живут в репозитории; применение — только через `scripts/04_deploy_from_repo.sh` (Фазы 2+ — через Ansible).
+- **Источник истины:** конфигурации хостов живут в репозитории (`configs/lab-prov-01/`, зеркало путей на сервере); применение — `rsync -av configs/lab-prov-01/ /` + `scripts/phase1_preflight.sh` (ADR-0004); пересборка метаданных автоустановки — `zt-build-metadata.sh`. Фазы 2+ — через Ansible.
 - **Документирование ограничений:** известные пределы решений фиксируются в ADR (пример: UEFI-ветка триггера), а не замалчиваются.
 
 ---
 
 ## 📚 Документация и справочники
 
-| Документ | О чём |
-| :--- | :--- |
-| [`docs/roadmap.md`](docs/roadmap.md) | Фазы, компоненты, критерии приёмки |
-| [`docs/guides/pxe-dnsmasq.md`](docs/guides/pxe-dnsmasq.md) | PXE-цепочка послойно: прошивка → DHCP → TFTP → pxelinux → autoinstall → триггер |
-| [`docs/guides/alt-etc-net.md`](docs/guides/alt-etc-net.md) | Сетевая подсистема ALT `/etc/net`: файлы, параметры, рецепты |
-| [`docs/guides/nftables.md`](docs/guides/nftables.md) | nftables: токены, stateful-логика, rate-limit, отладка |
-| [`docs/guides/autoinstall.md`](docs/guides/autoinstall.md) | Autoinstall ALT p10: ai + curl, 4 файла метаданных, install-scripts.tar, отладка |
-| [`docs/guides/alt-repositories.md`](docs/guides/alt-repositories.md) | Репозитории ALT: ветки, компоненты, noarch-ловушка, pinning |
-| [`inventory/network.md`](inventory/network.md) | Адресный план и портовая матрица |
+| Документ | О чём | Статус |
+| :--- | :--- | :--- |
+| [`configs/lab-prov-01/NOTES-phase1.md`](configs/lab-prov-01/NOTES-phase1.md) | Механизм Фазы 1 + грабли (ai+curl, 4 метаданных, IPAPPEND, VBox-iPXE) | ✅ есть |
+| [`docs/roadmap.md`](docs/roadmap.md) | Фазы, компоненты, критерии приёмки | 📅 Фаза 2 |
+| [`docs/guides/pxe-dnsmasq.md`](docs/guides/pxe-dnsmasq.md) | PXE-цепочка послойно: прошивка → DHCP → TFTP → pxelinux → autoinstall → триггер | 📅 Фаза 2 |
+| [`docs/guides/alt-etc-net.md`](docs/guides/alt-etc-net.md) | Сетевая подсистема ALT `/etc/net` | 📅 Фаза 2 |
+| [`docs/guides/nftables.md`](docs/guides/nftables.md) | nftables: токены, stateful, TFTP-conntrack, отладка | 📅 Фаза 3 |
+| [`docs/guides/autoinstall.md`](docs/guides/autoinstall.md) | Autoinstall ALT p10: ai + curl, 4 файла метаданных, install-scripts.tar | 📅 Фаза 2 |
+| [`docs/guides/alt-repositories.md`](docs/guides/alt-repositories.md) | Репозитории ALT: ветки, noarch-ловушка, pinning | 📅 Фаза 2 |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Аудиты и разборы инцидентов (cobbler-audit, ALT-конвенции, preflight-красные) | 📅 по мере фаз |
+| [`inventory/network.md`](inventory/network.md) | Адресный план и портовая матрица | 📅 Фаза 2 |
 
 ---
 
