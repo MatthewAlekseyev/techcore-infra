@@ -8,8 +8,8 @@ L=$(find "$W" -maxdepth 2 -type d -name lists | head -1)
 printf 'alterator-postinstall\n' > "$L/zt"
 ( cd "$W" && tar cf "$K/pkg-groups.tar" groups lists )
 B=/root/is-build; rm -rf "$B"; mkdir -p "$B/preinstall.d" "$B/postinstall.d"
-cp "$K/trigger.sh" "$B/preinstall.d/99-trigger.sh"
-cp "$K/trigger.sh" "$B/postinstall.d/99-trigger.sh"
+\cp "$K/trigger.sh" "$B/preinstall.d/99-trigger.sh"
+\cp "$K/trigger.sh" "$B/postinstall.d/99-trigger.sh"
 chmod 755 "$B"/preinstall.d/* "$B"/postinstall.d/*
 ( cd "$B" && tar cf "$K/install-scripts.tar" preinstall.d postinstall.d )
 chmod -R a+rX "$K"
