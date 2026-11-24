@@ -43,7 +43,7 @@
 
 | № | Требование | Реализация (фаза) |
 | :--- | :--- | :--- |
-| 1 | Автоматизация провижининга серверов на отечественных ОС | PXE + kickstart, zero-touch (Фаза 1 ✅) |
+| 1 | Автоматизация провижининга серверов на отечественных ОС | PXE + autoinstall.scm (ALT-specific), zero-touch (Фаза 1 ✅) |
 | 2 | Централизованная идентификация: AD, Kerberos, DNS, MFA | Samba 4 AD DC, SSSD, FreeRADIUS+TOTP (Фаза 2) |
 | 3 | Защита периметра: stateful firewall, NAT, site-to-site VPN, IDS, VoIP | nftables, WireGuard, Suricata, FreePBX (Фаза 3) |
 | 4 | DevOps-контур: Git, CI/CD, мониторинг, логирование, портал | GitLab CE, Zabbix, ELK, Nextcloud (Фаза 4) |
@@ -54,7 +54,8 @@
 решения — самостоятельная работа автора в рамках ограничений доступности пакетов
 целевой ветки ОС: каждое нетривиальное решение зафиксировано как
 [ADR](docs/adr/), каждое отклонение от ТЗ — обосновано и задокументировано
-(см. [ADR-0003](docs/adr/0003-cobbler-to-dnsmasq-pivot.md)).
+(см. [ADR-0003](docs/adr/0003-dnsmasq-over-cobbler.md) и
+[ADR-0006](docs/adr/0006-autoinstall-over-kickstart.md)).
 
 ---
 
@@ -70,6 +71,7 @@
 - Продакшен-нагрузки и HA-кластеризация (лабораторный стенд, single-node сервисы).
 - Публичные сертификаты и реальные домены (внутренний CA и зона `techcore.local`).
 - UEFI-ветка PXE-триггера pxe-just-once (покрыт BIOS/pxelinux; UEFI/grub — future work, зафиксировано в ADR-0003).
+- Финальный handoff `LOCALBOOT → диск` верен для PXE-ромов класса SeaBIOS; в VirtualBox iPXE-ром его не выполняет (задокументировано в ADR-0003 и в «Критериях приёмки» как pending на целевом гипервизоре).
 
 ---
 
@@ -77,14 +79,15 @@
 
 ```mermaid
 graph TB
-    subgraph HOST["Windows host / VirtualBox"]
-        subgraph LAB["techcore-lab 192.168.100.0/24 (Internal Network, без внешнего DHCP)"]
-            PROV["lab-prov-01 · .10<br/>dnsmasq DHCP+TFTP+PXE · httpd kickstart/RPM<br/>nftables default-deny · chrony"]
+    subgraph HOST["Linux host / KVM (libvirt + virt-manager, диски на LVM)"]
+    subgraph LAB["techcore-lab 192.168.100.0/24 (isolated network, без внешнего DHCP)"]
+        PROV["lab-prov-01 · .10<br/>dnsmasq DHCP+TFTP (DNS :53 зарезервирован, port=0)<br/>httpd autoinstall/RPM · nftables default-deny<br/>chrony · egress через enp0s3"]
             DC["lab-dc-01 · .20<br/>Samba 4 AD DC · Kerberos · DNS techcore.local<br/>chrony stratum-2"]
             GW["lab-gw-01 · .30<br/>nftables NAT/DNAT · WireGuard site-to-site<br/>FreePBX · Suricata"]
+            PROV -. "egress enp0s3 (без forward)" .-> NAT
             DEV["lab-devops-01 · .40<br/>GitLab CE · Zabbix · ELK · Nextcloud"]
         end
-        NAT(("VBox NAT 10.0.2.0/24 · egress"))
+        NAT(("libvirt NAT 192.168.122.0/24 · egress"))
     end
     BRANCH["Филиал · WireGuard 10.8.0.0/24"]
 
@@ -114,12 +117,16 @@ sequenceDiagram
     VM->>D: TFTP: pxelinux.0, ldlinux.c32, menu.c32
     VM->>D: TFTP: поиск конфига 01-MAC, затем default
     VM->>D: TFTP: vmlinuz + initrd
-    VM->>H: GET /kickstarts/alt-p10-server.ks
+    VM->>H: GET /kickstarts/autoinstall.scm
+    VM->>H: GET /kickstarts/vm-profile.scm
+    VM->>H: GET /kickstarts/pkg-groups.tar
+    VM->>H: GET /kickstarts/install-scripts.tar
     VM->>H: GET /alt-p10/ (RPM-пакеты)
-    Note over VM: Автоустановка: post: сеть, SSH, /etc/hosts
+    Note over VM: Автоустановка: 4 файла метаданных + RPM
     VM->>T: GET /trigger/installed?mac=MAC
-    T-->>D: создаёт pxelinux.cfg/01-MAC = LOCALBOOT 0
-    Note over VM: Reboot: 01-MAC найден РАНЬШЕ default, загрузка с диска
+    T-->>D: создаёт pxelinux.cfg/01-MAC = LOCALBOOT -2
+    Note over VM: Reboot (реальный PXE-ROM): 01-MAC читается РАНЬШЕ default → диск
+    Note over VM: Reboot (VirtualBox iPXE): LOCALBOOT не honours (0x7f8d81fe) → цикл рвёт boot order disk→net (ADR-0003)
 ```
 
 ---
@@ -128,7 +135,7 @@ sequenceDiagram
 
 | Фаза | Статус | Стек | Ключевые артефакты |
 | :--- | :--- | :--- | :--- |
-| **1. Фундамент и провижининг** | ✅ | ALT Linux p10 · VirtualBox · /etc/net · nftables · dnsmasq · syslinux/pxelinux · httpd · kickstart · chrony | [`configs/`](configs/), [`provisioning/`](provisioning/), [`scripts/`](scripts/) |
+| **1. Фундамент и провижининг** | ✅ | ALT Linux p10 · KVM (libvirt) · /etc/net · nftables · dnsmasq · syslinux/pxelinux · httpd · autoinstall.scm · chrony | ...
 | **2. Идентификация** | ⏳ | Samba 4 AD DC · krb5 · DNS · SSSD · FreeRADIUS+TOTP · chrony-иерархия | `ansible/roles/samba-ad` (в работе) |
 | **3. Периметр** | 🔜 | nftables NAT/DNAT · WireGuard · strongSwan · FreePBX/Asterisk · Suricata · VLAN | `ansible/roles/{nftables-gateway,wireguard,freepbx,suricata}` |
 | **4. DevOps** | 🔜 | GitLab CE · Docker/Podman · ELK (ES/Logstash/Kibana/Filebeat) · Zabbix 7 · Nextcloud | `ansible/roles/{gitlab,zabbix,elk,nextcloud}` |
@@ -141,17 +148,16 @@ sequenceDiagram
 
 ## 🔬 Фаза 1 детально (завершена)
 
-**Построено:**
-- **Dual-homed провижининг-хост:** `enp0s3` = NAT (DHCP, единственный default route), `enp0s8` = `techcore-lab` (static .10, без шлюза) — [ADR-0001](docs/adr/0001-dual-homed-network.md).
-- **Host-firewall default-deny:** stateful ingress, invalid drop+log, SSH по источникам с rate-limit, PXE-стек привязан к `enp0s8` на уровне правил — [ADR-0002](docs/adr/0002-firewall-default-deny.md).
-- **PXE-стек на dnsmasq:** DHCP-пул + per-MAC резервы, TFTP, выбор загрузчика BIOS/UEFI по op.60/93, иерархия конфигов pxelinux `01-MAC → default`, режимы SAFE / ZERO-TOUCH — [ADR-0003](docs/adr/0003-cobbler-to-dnsmasq-pivot.md).
-- **Kickstart ALT p10:** hashed rootpw, dual-homed сеть в `%post`, `/etc/hosts` под будущий Kerberos, триггер pxe-just-once.
-- **IaC-каркас:** всё состояние в Git; единая точка применения — `scripts/04_deploy_from_repo.sh`.
+**Построено (дизайн принят ADR-0001…0003; статус живьём — ниже):**
+- **Dual-homed провижининг-хост:** `enp0s3` = NAT (единственный default route; egress для git/обновлений/chrony), `enp0s8` = изолированный `techcore-lab` 192.168.100.0/24, `lab-prov-01` = `.10` без шлюза; весь PXE-трафик существует только на `enp0s8`, службы привязаны явно (`interface=enp0s8`, `except-interface=enp0s3`, `bind-interfaces`) — [ADR-0001](docs/adr/0001-network-topology-dual-homed.md). Юнит dnsmasq/httpd2 привязан к готовности `enp0s8` (иначе `bind-interfaces` не стартует — ADR-0001, отрицательные последствия).
+- **Host-firewall nftables default-deny:** `policy drop` на `input`+`forward`; явные allow на `enp0s8` только для провижининга (udp 67/68/69, tcp 80/443); `forward drop` — хост не роутит между сегментами, опция 3 (router) на `.10` не выдаётся (шлюз появится в Фазе 3 на `lab-gw-01`); мина TFTP закрыта `nf_conntrack_tftp` + явным `tftp-portrange`; мёртвый порт cobbler 25151 удалён из правил — [ADR-0002](docs/adr/0002-nftables-default-deny.md). Детализация SSH/egress-whitelist/Fail2ban — план Фазы 6, не Фаза 1.
+- **PXE-стек на dnsmasq + syslinux/pxelinux + CGI-триггер pxe-just-once:** DHCP+TFTP в одном демоне; per-MAC карточки `LOCALBOOT -2` разрываю цикл переустановок (замена cobbler-объекта `system`); **DNS на dnsmasq глушится `port=0`** — порт 53 заранее освобождён под Samba AD на `lab-dc-01` (Фаза 2); EFI/grub-ветка зарезервирована, не развёрнута — [ADR-0003](docs/adr/0003-dnsmasq-over-cobbler.md).
+- **Autoinstall ALT p10:** 4 файла метаданных (`autoinstall.scm`, `vm-profile.scm`, `pkg-groups.tar`, `install-scripts.tar`), механизм `ai curl=<каталог>`, `IPAPPEND 2` → `BOOTIF` в cmdline, триггер через `install-scripts.tar` (`preinstall.d` + `postinstall.d`).
+- **IaC-каркас:** состояние в Git; повторяемая валидация конфига — `scripts/phase1_preflight.sh` (ADR-0004); факты о сборке берутся из системы, не из туториалов (ADR-0005).
 
-**Критерии приёмки (выполнены):**
-- Пустая ВМ в `techcore-lab` устанавливается без единого вопроса.
-- После установки и ребута машина грузится с диска (цикл PXE разорван триггером).
-- Логи-цепочка непрерывна: `dnsmasq.log` → `httpd access_log` → `pxe-triggers.log`.
+**Критерии приёмки:**
+- *Доказано живьём (цепочка zero-touch):* пустая ВМ ставится без единого вопроса; все 4 метаданных отдают `200` гостю; RPM ставятся; триггер пишет per-MAC карточку (`pxe-triggers.log`: `OK 01-<mac> from=<guest-ip>`); логи-цепочка непрерывна `dnsmasq.log → httpd access_log → pxe-triggers.log`.
+- *Pending на целевом топологии (gate для тега `phase-1`, ADR-0004):* финальный handoff `pxelinux → LOCALBOOT → диск` на PXE-роме канонического гипервизора; привязка служб к `enp0s8`; `nftables default-deny`; `port=0` на DNS; TFTP-conntrack. На VirtualBox-iPXE `LOCALBOOT` не выполнялся (`0` и `−2` → `Could not boot image 0x7f8d81fe`, ADR-0003) — там цикл рвался boot order `disk→net`; на KVM-ром (SeaBIOS-класс) механизм карточки штатен, но прогон ещё не закрыт.
 
 ---
 
@@ -177,13 +183,13 @@ techcore-infra/
 ├── .github/                шаблоны задач фаз и pull request'ов
 ├── configs/                конфигурации хостов, зеркальные путям на сервере
 │   └── lab-prov-01/        (etc/hosts, nftables, dnsmasq, /etc/net)
-├── provisioning/           PXE-меню, kickstart, CGI-триггер pxe-just-once
+├── provisioning/           PXE-меню, autoinstall.scm, CGI-триггер pxe-just-once
 ├── scripts/                bootstrap и деплой из репо (01–04)
 ├── ansible/                роли, playbook'и, inventory (с Фазы 2)
 ├── inventory/              учёт ВМ, адресный план, портовая матрица
 └── docs/
     ├── adr/                архитектурные решения (контекст → решение → последствия)
-    ├── guides/             инженерные справочники (PXE, /etc/net, nftables, kickstart, репо ALT)
+    ├── guides/             инженерные справочники (PXE, /etc/net, nftables, autoinstall, репо ALT)
     ├── roadmap.md          фазовая поставка и критерии приёмки
     └── troubleshooting.md  аудиты и разборы инцидентов
 ```
@@ -192,37 +198,47 @@ techcore-infra/
 
 ## 🚀 Быстрый старт и воспроизводимость
 
-**Предпосылки:** VirtualBox 7+, ≥ 8 ГБ RAM на хосте, образ ALT Linux p10 Server,
-внутренняя сеть `techcore-lab` без DHCP.
+**Предпосылки:** KVM (libvirt + virt-manager, диски на LVM), ≥ 8 ГБ RAM на хосте, образ ALT Linux p10 Server, isolated-сеть `techcore-lab` без внешнего DHCP. VirtualBox допускается как валидационная среда (см. ROM-оговорки в «Границах» и ADR-0003).
+
+> **Важно о воспроизводимости (ADR-0004):** бинари stage (`altinst` ≈ 500 МБ, `vmlinuz`, `initrd.img`) в Git **не лежат** — только конфиги, метаданные и триггер. Перед `rsync` их надо разложить вручную с ISO в `/var/lib/tftpboot/alt-p10/` и `/var/www/html/alt-p10/` (рецепт — в `configs/lab-prov-01/NOTES-phase1.md`). `phase1_preflight.sh` проверит их наличие и покраснеет, если их нет — это и есть честная граница «клонировал ≠ поднял».
 
 ```bash
 # 1. Клонировать репозиторий
-git clone git@github.com:ВАШ_НИК_GITHUB/techcore-infra.git && cd techcore-infra
+git clone git@github.com:MatthewAlekseyev/techcore-infra.git && cd techcore-infra
 
-# 2. Бутстрап чистой ВМ ALT p10 (порядок важен)
-sudo bash scripts/03_base_packages.sh     # пакеты: ssh, git, dnsmasq, httpd, syslinux
-sudo bash scripts/01_init_network.sh      # dual-homed сеть + /etc/hosts
-sudo bash scripts/02_ssh_bootstrap.sh     # SSH-доступ (лаба; в Фазе 5 -> ключи+MFA)
-sudo bash scripts/04_deploy_from_repo.sh  # репо -> живой хост: конфиги, PXE, триггер
+# 2. Разложить бинари stage с ISO (однократно; см. NOTES-phase1.md)
+#    -> /var/lib/tftpboot/alt-p10/{vmlinuz,initrd.img}
+#    -> /var/www/html/alt-p10/{altinst,ALTLinux/,Metadata/}
 
-# 3. Тест zero-touch: создать пустую ВМ с адаптером в techcore-lab (Intel PRO/1000,
-#    BIOS, загрузка с сети) и включить её. Наблюдать цепочку:
+# 3. Применить конфиги провижининг-хоста из репо (зеркало путей на сервере)
+sudo rsync -av configs/lab-prov-01/ /
+
+# 4. Пересобрать метаданные автоустановки (если менял trigger.sh / группу пакетов)
+sudo bash /usr/local/sbin/zt-build-metadata.sh
+
+# 5. Валидация ДО рестарта и ДО коммита (ADR-0004)
+sudo bash scripts/phase1_preflight.sh        # должен быть GREEN
+
+# 6. Рестарт служб (только после GREEN)
+sudo systemctl restart dnsmasq httpd2 nftables
+
+# 7. Тест zero-touch: пустая ВМ с адаптером в techcore-lab (BIOS, загрузка с сети).
+#    Наблюдать цепочку:
 tail -f /var/log/dnsmasq.log          # DHCP + TFTP
-tail -f /var/log/httpd/access_log     # kickstart + RPM
+tail -f /var/log/httpd/access_log     # autoinstall + RPM
 tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 ```
-
-После установки новая ВМ доступна по адресу из пула .100–.200 (root / хэш из kickstart).
 
 ---
 
 ## 🔐 Безопасность
 
-- **Default-deny ingress/forward** на всех хостах; службы провижининга досягаемы только из PXE-сегмента (`iifname enp0s8`) — посегментный least-privilege.
-- **Stateful-фильтрация** + drop invalid + rate-limit на SSH и на логи дропов (защита от брутфорса и log-flood до появления Fail2ban).
-- **Секреты:** в репозитории отсутствуют plaintext-пароли (rootpw в kickstart — только SHA-512 хэш), приватные ключи и токены; `.gitignore` исключает `*.key`, `*.pem`, `secrets/`. VPN-ключи Фазы 3 — только через vault/placeholder.
-- **План hardening (Фаза 6):** egress-whitelist (замена `output policy accept`), Fail2ban → nftables sets, Wazuh HIDS, OpenSCAP CIS-профиль, учения DR.
-- Осознанные trade-off помечены комментариями в конфигах и ADR, а не скрыты.
+- **Dual-homed сегментация провижининг-хоста:** PXE-стек и внутренние сервисы досягаемы только через `enp0s8` (`techcore-lab`); наружный egress (git, обновления, chrony) — только через `enp0s3` (NAT); хост не роутит между сегментами (`forward drop`, нет opt3) — [ADR-0001](docs/adr/0001-network-topology-dual-homed.md), [ADR-0002](docs/adr/0002-nftables-default-deny.md).
+- **nftables default-deny (Фаза 1):** `policy drop` input+forward; allow на `enp0s8` = udp 67/68/69 + tcp 80/443; TFTP-мина закрыта conntrack + `tftp-portrange`; SSH-hardening / egress-whitelist / Fail2ban → nft sets — **план Фазы 6**, не заявляем как сделанное.
+- **DNS-резерв:** dnsmasq `port=0` — порт 53 свободен под Samba AD (Фаза 2), провижининг не squats чужой порт (ADR-0003).
+- **Секреты:** приватные ключи/токены в репо отсутствуют; `.gitignore` исключает `*.key`, `*.pem`, `secrets/`. Пароль в `autoinstall.scm` временно plaintext (изолированный сегмент) — переход на yescrypt (`mkpasswd --method=yescrypt` + `iscrypted #t`) в Фазе 2.
+- **Ограничение платформы (доказано live):** iPXE-ром VirtualBox не выполняет `LOCALBOOT` (`0`/`−2` → `0x7f8d81fe`); в лабо-валидации цикл рвался boot order `disk→net`, а per-MAC `LOCALBOOT`-карточка — механизм для реального PXE-рома ([ADR-0003](docs/adr/0003-dnsmasq-over-cobbler.md)).
+- Осознанные trade-off помечены в ADR, а не скрыты.
 
 ---
 
@@ -235,7 +251,8 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 | [0002](docs/adr/0002-nftables-default-deny.md) | Host-firewall default-deny, посегментный least-privilege | принято |
 | [0003](docs/adr/0003-dnsmasq-over-cobbler.md) | Пивот Cobbler → dnsmasq по результатам аудита ветки p10 | принято |
 | [0004](docs/adr/0004-validate-before-apply-commit.md) | Валидация конфига до применения и до публичного коммита | принято |
-| [0005](docs/adr/0005-discover-facts-from-system.md) | Distro-факты узнавать из системы
+| [0005](docs/adr/0005-discover-facts-from-system.md) | Distro-факты узнавать из системы, а не из туториалов | принято |
+| [0006](docs/adr/0006-autoinstall-over-kickstart.md) | Формат автоустановки: autoinstall.scm вместо Kickstart (ограничение установщика p10) | принято |
 ---
 
 ## 🩺 Troubleshooting: знаковые случаи
@@ -262,10 +279,10 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 | Документ | О чём |
 | :--- | :--- |
 | [`docs/roadmap.md`](docs/roadmap.md) | Фазы, компоненты, критерии приёмки |
-| [`docs/guides/pxe-dnsmasq.md`](docs/guides/pxe-dnsmasq.md) | PXE-цепочка послойно: прошивка → DHCP → TFTP → pxelinux → kickstart → триггер |
+| [`docs/guides/pxe-dnsmasq.md`](docs/guides/pxe-dnsmasq.md) | PXE-цепочка послойно: прошивка → DHCP → TFTP → pxelinux → autoinstall → триггер |
 | [`docs/guides/alt-etc-net.md`](docs/guides/alt-etc-net.md) | Сетевая подсистема ALT `/etc/net`: файлы, параметры, рецепты |
 | [`docs/guides/nftables.md`](docs/guides/nftables.md) | nftables: токены, stateful-логика, rate-limit, отладка |
-| [`docs/guides/kickstart.md`](docs/guides/kickstart.md) | Kickstart: директивы, %post, отладка установщика |
+| [`docs/guides/autoinstall.md`](docs/guides/autoinstall.md) | Autoinstall ALT p10: ai + curl, 4 файла метаданных, install-scripts.tar, отладка |
 | [`docs/guides/alt-repositories.md`](docs/guides/alt-repositories.md) | Репозитории ALT: ветки, компоненты, noarch-ловушка, pinning |
 | [`inventory/network.md`](inventory/network.md) | Адресный план и портовая матрица |
 
@@ -275,7 +292,7 @@ tail -f /var/log/pxe-triggers.log     # финиш: MAC -> localboot
 
 - **Администрирование Linux (ALT):** пакетная подсистема, systemd, сетевой стек, служебные конвенции дистрибутива.
 - **Сетевая инженерия:** сегментация, dual-homed топологии, маршрутизация с единственным default route, DHCP/TFTP/DNS, план адресации и портов.
-- **Провижининг:** PXE-цепочка послойно, kickstart-автоматизация, zero-touch и защита от циклов переустановки.
+- **Провижининг:** PXE-цепочка послойно, autoinstall.scm-автоматизация, zero-touch и защита от циклов переустановки.
 - **Безопасность:** stateful firewall default-deny, least-privilege по интерфейсам, управление секретами в IaC, план hardening.
 - **IaC и GitOps:** репозиторий как источник истины, воспроизводимый деплой, Ansible с Фазы 2, CI/CD и дрейф-контроль с Фазы 5.
 - **Работа с требованиями заказчика:** интерпретация ТЗ, управление отклонениями через ADR, доказательные аудиты вместо догадок.
