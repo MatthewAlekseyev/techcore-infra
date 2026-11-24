@@ -26,8 +26,7 @@ iPXE-ром VBox НЕ выполняет LOCALBOOT (0 и -2): "Could not boot im
 LOCALBOOT — штатный механизм доков.
 
 ## Долги -> Фаза 2
-1. Пароль plaintext в autoinstall.scm (читается по HTTP, уйдёт в git):
-   mkpasswd --method=yescrypt -> iscrypted #t passwd_1 "$y$j9T$..." (док 22.1.3.5).
+1. Секреты приватные ключи/токены в репо отсутствуют; `.gitignore` исключает `*.key`, `*.pem`, `secrets/`. Пароль в `autoinstall.scm` — plaintext: осознанное решение для изо   лированного лабораторного сегмента, а не недоделка. Хэширование пароля в автоустановке ALT p10 не имеет встроенного синтаксиса (ALT Linux Wiki: модули установки принимают   только plain text); обходной путь через `chpasswd -e` в `postinstall.d` отложен до прохода hardening (Фаза 6) как не дающий выигрыша в изолированной сети. Фиксация секрет   а в репозитории — вне scope Фаз 1–2; для прода-контекста — Ansible Vault / ротация после первого SSH (Фаза 5+).
 2. computer_name "zt-node" и name "enp0s3" статичны -> рендерер по MAC/IP
    из аренды dnsmasq (тот же CGI-паттерн, что триггер).
 3. Три механизма триггера -> оставить install-scripts.tar.
