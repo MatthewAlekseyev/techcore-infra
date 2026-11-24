@@ -1,21 +1,12 @@
-# ============================================================================
-#  TechCore :: pxelinux.cfg/default :: режим SAFE (первый живой тест)
-#  Читает: pxelinux.0 в RAM загружаемой ВМ (НЕ dnsmasq, НЕ Apache).
-#  Пути относительные от tftp-root=/var/lib/tftpboot, все в нижнем регистре.
-#  Собрано под syslinux 4.04-alt18: меню через PROMPT, без зависимости от menu.c32.
-#  Параметры ядра/initrd взяты из isolinux.cfg самого ISO (источник истины).
-# ============================================================================
-
-DEFAULT local
-PROMPT 1
-TIMEOUT 300
-ONTIMEOUT local
-
-LABEL local
-    MENU LABEL Boot from local disk
-    LOCALBOOT 0
+DEFAULT install-alt-p10
+PROMPT 0
+TIMEOUT 50
+ONTIMEOUT install-alt-p10
 
 LABEL install-alt-p10
-    MENU LABEL Install ALT Linux p10 Server
     KERNEL alt-p10/vmlinuz
-    APPEND initrd=alt-p10/initrd.img stagename=altinst ramdisk_size=786432 vga=normal
+    APPEND initrd=alt-p10/initrd.img fastboot changedisk automatic=method:http,network:dhcp,server:192.168.100.10,directory:/alt-p10 stagename=altinst ramdisk_size=514073 showopts vga=normal mpath lowmem ai curl=http://192.168.100.10/kickstarts
+    IPAPPEND 2
+
+LABEL local
+    LOCALBOOT 0
